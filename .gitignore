@@ -1,0 +1,18 @@
+# Caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Entornos Virtuales
+venv/
+env/
+.env
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Editores y SO
+.vscode/
+.idea/
+.DS_Store
