@@ -4,9 +4,6 @@ from einsteinengine.symbolic.tensor import BaseRelativityTensor
 class RiemannCurvatureTensor(BaseRelativityTensor):
     """ Riemann standard index configuration: 1 upper, 3 lower (ulll -> R^rho_{sigma mu nu})"""
 
-    def __init__(self, arr, syms, name="Riemann", verbose=False):
-        super().__init__(arr, syms,config="ulll", name=name, verbose=verbose)
-
     @classmethod
     def from_christoffel(cls, christoffel, verbose=False):
         """
@@ -39,7 +36,7 @@ class RiemannCurvatureTensor(BaseRelativityTensor):
                         
                         R[rho][sigma][mu][nu] = term1 - term2 + term3 - term4
                         
-        return cls(R, syms)
+        return cls(R, syms, config="ulll", name="RiemannCurvature", verbose=verbose)    
     
     @classmethod
     def from_metric(cls, metric, verbose=False):

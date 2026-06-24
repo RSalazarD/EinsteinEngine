@@ -16,7 +16,7 @@ class MetricTensor(BaseRelativityTensor):
         if verbose:
             print(f"[{self.name}] Métrica validada y lista para cálculos.")
 
-        if len(self._tensor) != len(self._tensor[0]):
+        if len(self._data) != len(self._data[0]):
             raise ValueError("Metric must be a squared matrix")
             
         self.dims = len(syms)
@@ -35,7 +35,7 @@ class MetricTensor(BaseRelativityTensor):
 
         # If not, run the SymPy inversion pipeline
         
-        sp_matrix = sp.Matrix(self._tensor)
+        sp_matrix = sp.Matrix(self._data)
         dims = sp_matrix.shape[0]
         
         # Handle cases where SymEngine structures read the data as a flat 1D column

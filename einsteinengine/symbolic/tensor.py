@@ -1,31 +1,39 @@
+from einsteinengine.symbolic.core import BaseRelativityObject
 import symengine as se
 import sympy as sp
-
-class BaseRelativityTensor:
+class BaseRelativityTensor(BaseRelativityObject):
     """
-    Base class for all tensors in the library (Metric, Christoffel, Riemann, etc.).
-    Uses SymEngine (C++) as the backend to improve performance.
+    Base class for strict tensor objects (Metric, Riemann, Ricci, etc.).
+    Inherits coordinate and array management from BaseRelativityObject.
+    Adds tensor-specific properties like index configuration (e.g., 'll', 'uu', 'ul').
     """
 
     def __init__(self, arr, syms, config="ll", name="GenericTensor", verbose=False):
-        """
-        arr: Nested list containing the mathematical components of the tensor.
-        syms: Coordinate symbols (e.g., t, r, theta, phi).
-        config: Covariant ('l') or contravariant ('u') indices.
-        """
-        self.name = name
+        # 1. Delegate the heavy lifting to the parent object (coordinates & SymEngine)
+        super().__init__(arr, syms, name=name, verbose=verbose)
+        
+        # 2. Tensor-exclusive physical properties
         self.config = config
         
-        # Test Comments control 
-        if verbose:
-            print(f"Initializing base structure (SymEngine) for: {self.name}...")
+        # 3. Component validation
+        # Ensure the length of the configuration matches the tensor rank
+        # (e.g., a 2D matrix needs a 2-letter config like 'll')
+        if self._data and isinstance(arr, list):
+            rank = self._calculate_rank(arr)
+            if len(self.config) != rank:
+                raise ValueError(f"Configuration length ({len(self.config)}) does not match tensor rank ({rank})")
 
-        # Converting coordinates to SymEngine        
-        self.syms = [se.sympify(s) for s in syms]
-        
-        # Save the tensor components by converting them to SymEngine.
-        # Store internally as a generic nested list.
-        self._tensor = self._symenginify_array(arr)
+        if self.verbose:
+            print(f"[{self.name}] Tensor initialized with index configuration: '{self.config}'.")
+  
+    def _calculate_rank(self, arr):
+        """
+        Calculates the mathematical rank (number of indices) of the tensor
+        by measuring the depth of the nested lists.
+        """
+        if isinstance(arr, list):
+            return 1 + self._calculate_rank(arr[0])
+        return 0
 
     def _symenginify_array(self, arr):
         """
@@ -37,13 +45,9 @@ class BaseRelativityTensor:
         else:
             return se.sympify(arr)
 
-    def get_raw_data(self):
-        """Returns the unsimplified data."""
-        return self._tensor
-
     def get_component(self, *indices):
         """Calculates and simplifies a single component."""
-        val = self._tensor
+        val = self._data
         for i in indices:
             val = val[i]
         return sp.simplify(sp.sympify(val))
@@ -70,7 +74,7 @@ class BaseRelativityTensor:
             return sp.latex(val)
         else:
             # Entire tensor (caution: can be very large) 
-            return sp.latex(self._tensor)
+            return sp.latex(self._data)
     
     def _repr_latex_(self):
         """
@@ -95,5 +99,5 @@ class BaseRelativityTensor:
                     if val != 0:
                         non_zeros.append((current_indices + [i], val))
         
-        _recurse(self._tensor, [])
+        _recurse(self._data, [])
         return non_zeros
