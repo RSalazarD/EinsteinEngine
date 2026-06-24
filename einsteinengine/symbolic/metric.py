@@ -3,7 +3,7 @@ import sympy as sp
 from einsteinengine.symbolic.tensor import BaseRelativityTensor
 
 class MetricTensor(BaseRelativityTensor):
-    """
+    r"""
     Class representing the Metric Tensor ($g_{\mu\nu}$)
     Inherits from BaseRelativityTensor
     """
