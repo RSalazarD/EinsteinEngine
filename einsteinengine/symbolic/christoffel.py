@@ -1,6 +1,6 @@
 import symengine as se
-from einsteinpy.symbolic.tensor import BaseRelativityTensor
-from einsteinpy.symbolic.metric import MetricTensor
+from einsteinengine.symbolic.tensor import BaseRelativityTensor
+from einsteinengine.symbolic.metric import MetricTensor
 
 class ChristoffelSymbols(BaseRelativityTensor):
     """

@@ -1,6 +1,6 @@
 import symengine as se
 import sympy as sp
-from einsteinpy.symbolic.tensor import BaseRelativityTensor
+from einsteinengine.symbolic.tensor import BaseRelativityTensor
 
 class MetricTensor(BaseRelativityTensor):
     """

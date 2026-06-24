@@ -1,5 +1,5 @@
 import symengine as se
-from einsteinpy.symbolic.tensor import BaseRelativityTensor
+from einsteinengine.symbolic.tensor import BaseRelativityTensor
 
 class RiemannCurvatureTensor(BaseRelativityTensor):
     """ Riemann standard index configuration: 1 upper, 3 lower (ulll -> R^rho_{sigma mu nu})"""
@@ -49,7 +49,7 @@ class RiemannCurvatureTensor(BaseRelativityTensor):
         if verbose:
             print(f"Triggering pipeline execution for metric: '{metric.name}'")
     
-        from einsteinpy.symbolic.christoffel import ChristoffelSymbols
+        from einsteinengine.symbolic.christoffel import ChristoffelSymbols
         
         intermediate_christoffel = ChristoffelSymbols.from_metric(metric, verbose=verbose)
         return cls.from_christoffel(intermediate_christoffel, verbose=verbose)
