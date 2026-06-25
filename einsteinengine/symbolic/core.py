@@ -131,5 +131,6 @@ class BaseRelativityObject:
                 print(f"[{self.name}] Created simplified copy.")
             return new_obj
 
-
+    
+    
     

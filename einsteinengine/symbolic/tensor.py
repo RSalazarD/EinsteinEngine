@@ -276,5 +276,165 @@ class BaseRelativityTensor(BaseRelativityObject):
         # Return tensor under the new coordinate patch
         return BaseRelativityTensor(transformed_data, new_se_syms, config=self.config, name=final_name, verbose=self.verbose)
 
+# --- Tensor Arithmetic ---
 
+    def __add__(self, other):
+        """Allows addition using the '+' operator: T = A + B"""
+        if not isinstance(other, BaseRelativityTensor):
+            raise TypeError("You can only add a Tensor to another Tensor.")
+        if self.dims != other.dims or self.config != other.config:
+            raise ValueError(f"Cannot add tensors with different indices or dimensions. Got {self.config} and {other.config}")
+
+        # Recursive addition for any tensor rank
+        def _recursive_add(a, b):
+            if isinstance(a, list):
+                return [_recursive_add(x, y) for x, y in zip(a, b)]
+            return a + b
+
+        new_data = _recursive_add(self._data, other._data)
+        return BaseRelativityTensor(new_data, self.syms, self.config, name=f"({self.name} + {other.name})", verbose=self.verbose)
+
+    def __sub__(self, other):
+        """Allows subtraction using the '-' operator: T = A - B"""
+        if not isinstance(other, BaseRelativityTensor):
+            raise TypeError("You can only subtract a Tensor from another Tensor.")
+        if self.dims != other.dims or self.config != other.config:
+            raise ValueError("Cannot subtract tensors with different index configurations.")
+
+        def _recursive_sub(a, b):
+            if isinstance(a, list):
+                return [_recursive_sub(x, y) for x, y in zip(a, b)]
+            return a - b
+
+        new_data = _recursive_sub(self._data, other._data)
+        return BaseRelativityTensor(new_data, self.syms, self.config, name=f"({self.name} - {other.name})", verbose=self.verbose)
+
+    def __mul__(self, scalar):
+        """Allows right scalar multiplication: T = A * 5"""
+        import symengine as se
+        
+        # We only allow multiplication by scalars (numbers or SymEngine/SymPy expressions)
+        if isinstance(scalar, BaseRelativityTensor):
+            raise TypeError("Use specific tensor product methods to multiply two tensors, not the '*' operator.")
+
+        scalar_val = se.sympify(scalar)
+
+        def _recursive_mul(a):
+            if isinstance(a, list):
+                return [_recursive_mul(x) for x in a]
+            return a * scalar_val
+
+        new_data = _recursive_mul(self._data)
+        return BaseRelativityTensor(new_data, self.syms, self.config, name=f"(ScalarMul_{self.name})", verbose=self.verbose)
+
+    def __rmul__(self, scalar):
+        """Allows left scalar multiplication: T = 5 * A"""
+        # Commutative operation, just call the normal __mul__
+        return self.__mul__(scalar)
+
+    def lower_index(self, pos, metric, verbose=False):
+        """
+        Lowers a contravariant ('u') index at the specified position using the metric tensor.
+        T_{... mu ...} = sum_alpha (g_{mu alpha} * T^{... alpha ...})
+        
+        Args:
+            pos (int): The position of the index to lower (0-indexed).
+            metric (BaseRelativityTensor): The covariant metric tensor (config 'll').
+        """
+        import symengine as se
+        
+        # 1. Physical and dimensional validation
+        if self.config[pos] != 'u':
+            raise ValueError(f"Index at position {pos} is already covariant ('l') or invalid. Config: {self.config}")
+        if metric.config != "ll":
+            raise ValueError("Metric must be purely covariant ('ll') to lower an index.")
+            
+        if verbose:
+            print(f"[{self.name}] Lowering index at position {pos}...")
+            
+        dims = self.dims
+        T_data = self.get_raw_data()
+        g_data = metric.get_raw_data()
+        rank = len(self.config)
+        
+        # 2. Update the configuration string dynamically (e.g., 'uul' -> 'lul')
+        new_config = self.config[:pos] + 'l' + self.config[pos+1:]
+        
+        # Helper to extract the old tensor component safely
+        def get_T(indices):
+            val = T_data
+            for idx in indices:
+                val = val[idx]
+            return val
+            
+        # Recursive builder to maintain exact index positions
+        def build_lowered(current_indices):
+            if len(current_indices) == rank:
+                mu = current_indices[pos] # The index we are lowering
+                term_sum = se.sympify(0)
+                
+                # Perform the Einstein summation over the dummy index 'alpha'
+                for alpha in range(dims):
+                    old_indices = list(current_indices)
+                    old_indices[pos] = alpha
+                    term_sum += g_data[mu][alpha] * get_T(old_indices)
+                return term_sum
+            else:
+                return [build_lowered(current_indices + [d]) for d in range(dims)]
+                
+        new_data = build_lowered([])
+        new_name = f"{self.name}_lowered_{pos}"
+        
+        # Return as a new Tensor object, allowing for method chaining
+        return self.__class__(new_data, self.syms, config=new_config, name=new_name, verbose=verbose)
+
+    def raise_index(self, pos, metric_inv, verbose=False):
+        """
+        Raises a covariant ('l') index at the specified position using the inverse metric tensor.
+        T^{... mu ...} = sum_alpha (g^{mu alpha} * T_{... alpha ...})
+        
+        Args:
+            pos (int): The position of the index to raise (0-indexed).
+            metric_inv (BaseRelativityTensor): The contravariant inverse metric tensor (config 'uu').
+        """
+        import symengine as se
+        
+        if self.config[pos] != 'l':
+            raise ValueError(f"Index at position {pos} is already contravariant ('u') or invalid. Config: {self.config}")
+        if metric_inv.config != "uu":
+            raise ValueError("Must provide the inverse metric ('uu') to raise an index.")
+            
+        if verbose:
+            print(f"[{self.name}] Raising index at position {pos}...")
+            
+        dims = self.dims
+        T_data = self.get_raw_data()
+        g_inv_data = metric_inv.get_raw_data()
+        rank = len(self.config)
+        
+        new_config = self.config[:pos] + 'u' + self.config[pos+1:]
+        
+        def get_T(indices):
+            val = T_data
+            for idx in indices:
+                val = val[idx]
+            return val
+            
+        def build_raised(current_indices):
+            if len(current_indices) == rank:
+                mu = current_indices[pos]
+                term_sum = se.sympify(0)
+                
+                for alpha in range(dims):
+                    old_indices = list(current_indices)
+                    old_indices[pos] = alpha
+                    term_sum += g_inv_data[mu][alpha] * get_T(old_indices)
+                return term_sum
+            else:
+                return [build_raised(current_indices + [d]) for d in range(dims)]
+                
+        new_data = build_raised([])
+        new_name = f"{self.name}_raised_{pos}"
+        
+        return self.__class__(new_data, self.syms, config=new_config, name=new_name, verbose=verbose)
 
