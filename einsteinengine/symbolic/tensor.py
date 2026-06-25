@@ -342,7 +342,6 @@ class BaseRelativityTensor(BaseRelativityObject):
             metric (BaseRelativityTensor): The covariant metric tensor (config 'll').
         """
         import symengine as se
-        
         # 1. Physical and dimensional validation
         if self.config[pos] != 'u':
             raise ValueError(f"Index at position {pos} is already covariant ('l') or invalid. Config: {self.config}")
@@ -350,8 +349,7 @@ class BaseRelativityTensor(BaseRelativityObject):
             raise ValueError("Metric must be purely covariant ('ll') to lower an index.")
             
         if verbose:
-            print(f"[{self.name}] Lowering index at position {pos}...")
-            
+            print(f"[{self.name}] Lowering index at position {pos}...")  
         dims = self.dims
         T_data = self.get_raw_data()
         g_data = metric.get_raw_data()
@@ -359,7 +357,6 @@ class BaseRelativityTensor(BaseRelativityObject):
         
         # 2. Update the configuration string dynamically (e.g., 'uul' -> 'lul')
         new_config = self.config[:pos] + 'l' + self.config[pos+1:]
-        
         # Helper to extract the old tensor component safely
         def get_T(indices):
             val = T_data
@@ -437,4 +434,6 @@ class BaseRelativityTensor(BaseRelativityObject):
         new_name = f"{self.name}_raised_{pos}"
         
         return self.__class__(new_data, self.syms, config=new_config, name=new_name, verbose=verbose)
+
+
 
