@@ -4,7 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Entornos Virtuales
+# Virtual Enviroments
 venv/
 env/
 .env
@@ -12,7 +12,16 @@ env/
 # Jupyter Notebook
 .ipynb_checkpoints/
 
-# Editores y SO
+# Editors y OS
 .vscode/
 .idea/
 .DS_Store
+
+# temporary build directories
+dist/
+build/
+*.egg-info/
+
+# temporary files
+__pycache__/
+.pytest_cache/
