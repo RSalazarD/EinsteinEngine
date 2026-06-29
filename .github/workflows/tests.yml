@@ -1,0 +1,31 @@
+name: Automated Tests (CI)
+
+# 1. TRIGGER: When does the robot wake up?
+on:
+  push:
+    branches: [ "main" ] # Every time you push code to the main branch
+
+# 2. RUNNER: Where does it execute?
+jobs:
+  test:
+    runs-on: ubuntu-latest # GitHub lends us a Linux virtual machine for free
+
+    # 3. STEPS: What commands does it run?
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest
+        pip install .  # Installs your own EinsteinEngine library in the runner
+
+    - name: 🧪 Run tests
+      run: |
+        pytest
