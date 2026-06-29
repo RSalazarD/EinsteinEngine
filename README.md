@@ -21,8 +21,8 @@ EinsteinEngine calculates the entire Riemann Curvature Tensor of a Black Hole in
 
 ```python
 import sympy as sp
-from einsteinpy.symbolic.metric import MetricTensor
-from einsteinpy.symbolic.riemann import RiemannCurvatureTensor
+from einsteinengine.symbolic.metric import MetricTensor
+from einsteinengine.symbolic.riemann import RiemannCurvatureTensor
 
 # 1. Define your symbols and metric array
 t, r, theta, phi = sp.symbols('t r theta phi', real=True)
