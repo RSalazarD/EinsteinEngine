@@ -25,6 +25,8 @@ class BaseRelativityTensor(BaseRelativityObject):
             if len(self.config) != rank:
                 raise ValueError(f"Configuration length ({len(self.config)}) does not match tensor rank ({rank})")
 
+        self._component_cache = {}
+
         if self.verbose:
             print(f"[{self.name}] Tensor initialized with index configuration: '{self.config}'.")
   
@@ -38,12 +40,34 @@ class BaseRelativityTensor(BaseRelativityObject):
         else:
             return se.sympify(arr)
 
-    def get_component(self, *indices):
-        """Calculates and simplifies a single component."""
-        val = self._data
-        for i in indices:
-            val = val[i]
-        return sp.simplify(sp.sympify(val))
+    def get_component(self, *indices, simplify=True):
+        """Return a single tensor component.
+
+        By default the value is simplified for readability, but a fast path is
+        available for performance-sensitive access where simplification is not
+        required. Repeated access is cached to reduce overhead for large tensor
+        workloads.
+        """
+        key = (tuple(indices), simplify)
+        if key in self._component_cache:
+            return self._component_cache[key]
+
+        val = self._get_raw_component(*indices)
+
+        if not simplify:
+            self._component_cache[key] = val
+            return val
+
+        expr = sp.sympify(val)
+        result = sp.simplify(expr)
+
+        self._component_cache[key] = result
+        return result
+
+    def clear_component_cache(self):
+        """Clear cached component values to free memory after large symbolic workloads."""
+        self._component_cache.clear()
+        self._raw_component_cache.clear()
 
     def _sympyfy_and_simplify(self, arr):
         """
@@ -56,18 +80,56 @@ class BaseRelativityTensor(BaseRelativityObject):
             sympy_expr = sp.sympify(arr)
             return sp.trigsimp(sympy_expr)
     
+    def _format_value(self, value, format="latex", simplify=False):
+        """Render a scalar, component, or nested tensor structure as text."""
+        if isinstance(value, list):
+            if not value:
+                return "[]"
+
+            if all(isinstance(item, list) for item in value):
+                rows = [self._format_value(row, format=format, simplify=simplify) for row in value]
+                if format == "latex":
+                    return r"\\begin{bmatrix} " + r" \\ " + r" \\ ".join(rows) + r" \\end{bmatrix}"
+                return "[" + ", ".join(rows) + "]"
+
+            if format == "latex":
+                return r"\\left[ " + ", ".join(self._format_value(item, format=format, simplify=simplify) for item in value) + r" \\right]"
+            return "[" + ", ".join(self._format_value(item, format=format, simplify=simplify) for item in value) + "]"
+
+        expr = sp.sympify(value)
+        if simplify:
+            expr = sp.simplify(expr)
+
+        if format == "latex":
+            return sp.latex(expr)
+        return sp.sstr(expr)
+
+    def to_string(self, format="latex", simplify=False, *indices):
+        """Return a human-readable representation of a tensor or one of its components.
+
+        Args:
+            format: Either 'latex' for notebook-style output or 'plain' for a lightweight text fallback.
+            simplify: If True, simplify the expression before formatting.
+            indices: Optional component coordinates (e.g. to_string(0, 1, 1)).
+        """
+        if indices:
+            value = self.get_component(*indices, simplify=simplify)
+            return self._format_value(value, format=format, simplify=False)
+
+        return self._format_value(self._data, format=format, simplify=simplify)
+
     def to_latex(self, *indices):
         """
         If indices are provided (e.g. to_latex(0, 1, 1)), simplifies only that component.
         If no arguments are passed, converts the entire tensor to LaTeX.
         """
-        if indices:
-            # Specific component 
-            val = self.get_component(*indices)
-            return sp.latex(val)
-        else:
-            # Entire tensor (caution: can be very large) 
-            return sp.latex(self._data)
+        return self.to_string(format="latex", simplify=True, *indices)
+
+    def __str__(self):
+        return self.to_string(format="plain")
+
+    def __repr__(self):
+        return self.to_string(format="plain")
     
     def _repr_latex_(self):
         """
@@ -151,10 +213,8 @@ class BaseRelativityTensor(BaseRelativityObject):
                      "".join([other.config[i] for i in other_free])
                      
         # Fast helper function to read nested matrix values dynamically
-        def get_val(data, coords):
-            val = data
-            for c in coords: val = val[c]
-            return val
+        def get_val(obj, coords):
+            return obj._get_raw_component(*coords)
 
         # Combinatorial Engine (einsum approach)
         dims = self.dims
@@ -170,7 +230,7 @@ class BaseRelativityTensor(BaseRelativityObject):
                 for p_idx, (s_idx, o_idx) in enumerate(pairs):
                     coords_self[s_idx] = dummy_vals[p_idx]
                     coords_other[o_idx] = dummy_vals[p_idx]
-                result += get_val(self._data, coords_self) * get_val(other.get_raw_data(), coords_other)
+                result += get_val(self, coords_self) * get_val(other, coords_other)
             
             final_name = new_name if new_name else "ContractedScalar"
             return BaseRelativityTensor(result, self.syms, config="", name=final_name, verbose=self.verbose)
@@ -196,7 +256,7 @@ class BaseRelativityTensor(BaseRelativityObject):
                         coords_other[o_idx] = dummy_vals[p_idx]
                         
                     # Multiply and sum "on the fly"
-                    tmp_sum += get_val(self._data, coords_self) * get_val(other.get_raw_data(), coords_other)
+                    tmp_sum += get_val(self, coords_self) * get_val(other, coords_other)
                 return tmp_sum
             else:
                 return [build_result(free_coords_flat + [d]) for d in range(dims)]
@@ -357,12 +417,15 @@ class BaseRelativityTensor(BaseRelativityObject):
         
         # 2. Update the configuration string dynamically (e.g., 'uul' -> 'lul')
         new_config = self.config[:pos] + 'l' + self.config[pos+1:]
-        # Helper to extract the old tensor component safely
+        component_cache = {}
+
         def get_T(indices):
-            val = T_data
-            for idx in indices:
-                val = val[idx]
-            return val
+            key = tuple(indices)
+            if key in component_cache:
+                return component_cache[key]
+            value = self._get_raw_component(*indices)
+            component_cache[key] = value
+            return value
             
         # Recursive builder to maintain exact index positions
         def build_lowered(current_indices):
@@ -405,17 +468,19 @@ class BaseRelativityTensor(BaseRelativityObject):
             print(f"[{self.name}] Raising index at position {pos}...")
             
         dims = self.dims
-        T_data = self.get_raw_data()
         g_inv_data = metric_inv.get_raw_data()
         rank = len(self.config)
         
         new_config = self.config[:pos] + 'u' + self.config[pos+1:]
+        component_cache = {}
         
         def get_T(indices):
-            val = T_data
-            for idx in indices:
-                val = val[idx]
-            return val
+            key = tuple(indices)
+            if key in component_cache:
+                return component_cache[key]
+            value = self._get_raw_component(*indices)
+            component_cache[key] = value
+            return value
             
         def build_raised(current_indices):
             if len(current_indices) == rank:

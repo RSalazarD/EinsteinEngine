@@ -1,3 +1,4 @@
+import pytest
 import sympy as sp
 
 from einsteinengine.symbolic.christoffel import ChristoffelSymbols
@@ -24,6 +25,37 @@ def test_metric_inverse_and_component_access():
     assert metric.get_component(0, 1) == 0
 
 
+def test_metric_rejects_ragged_matrix():
+    x, y = sp.symbols("x y", real=True)
+
+    with pytest.raises(ValueError, match="square matrix"):
+        MetricTensor([[1, 0], [0]], [x, y], name="BadMetric")
+
+
+def test_metric_rejects_singular_matrix():
+    x, y = sp.symbols("x y", real=True)
+    metric = MetricTensor([[1, 2], [2, 4]], [x, y], name="SingularMetric")
+
+    with pytest.raises(ValueError, match="invertible"):
+        metric.inv()
+
+
+def test_symmetric_off_diagonal_metric_pipeline():
+    u, v = sp.symbols("u v", real=True)
+    metric = MetricTensor([[1, u], [u, 1 + u**2]], [u, v], name="OffDiagonalMetric")
+
+    assert metric.is_symmetric() is True
+
+    inverse_metric = metric.inv()
+    assert sp.sstr(inverse_metric.get_component(0, 0)) == sp.sstr(u**2 + 1)
+    assert sp.sstr(inverse_metric.get_component(1, 1)) == sp.sstr(1)
+    assert sp.sstr(inverse_metric.get_component(0, 1)) == sp.sstr(-u)
+    assert sp.sstr(inverse_metric.get_component(1, 0)) == sp.sstr(-u)
+
+    christoffel = ChristoffelSymbols.from_metric(metric, verbose=False)
+    assert sp.sstr(sp.simplify(sp.sympify(christoffel.get_raw_data()[0][0][1]))) == sp.sstr(-u**2)
+
+
 def test_tensor_component_access_and_contraction():
     x, y = sp.symbols("x y", real=True)
     tensor = BaseRelativityTensor([[1, 2], [3, 4]], [x, y], config="ul", name="TestTensor")
@@ -35,6 +67,14 @@ def test_tensor_component_access_and_contraction():
     assert contracted.get_component() == 5
 
 
+def test_component_access_can_skip_simplification_for_speed():
+    x, y = sp.symbols("x y", real=True)
+    tensor = BaseRelativityTensor([[1, x], [x, 2]], [x, y], config="ll", name="SpeedTensor")
+
+    value = tensor.get_component(0, 1, simplify=False)
+    assert sp.sstr(value) == sp.sstr(x)
+
+
 def test_schwarzschild_christoffel_and_riemann_components():
     t, r, theta, phi = sp.symbols("t r theta phi", real=True)
     M = sp.symbols("M", real=True, positive=True)
@@ -44,7 +84,7 @@ def test_schwarzschild_christoffel_and_riemann_components():
         [-(1 - 2 * M / r), 0, 0, 0],
         [0, 1 / (1 - 2 * M / r), 0, 0],
         [0, 0, r**2, 0],
-        [0, 0, 0, r**2 * sp.sin(theta) ** 2],
+        [0, 0, 0, r**2 * sp.sin(theta) ** 2], # type: ignore
     ]
     metric = MetricTensor(g_schwarzschild, syms, name="Schwarzschild")
 
@@ -68,7 +108,7 @@ def test_ricci_tensor_scalar_and_einstein_tensor_for_schwarzschild():
         [-(1 - 2 * M / r), 0, 0, 0],
         [0, 1 / (1 - 2 * M / r), 0, 0],
         [0, 0, r**2, 0],
-        [0, 0, 0, r**2 * sp.sin(theta) ** 2],
+        [0, 0, 0, r**2 * sp.sin(theta) ** 2], # type: ignore
     ]
     metric = MetricTensor(g_schwarzschild, syms, name="Schwarzschild")
 

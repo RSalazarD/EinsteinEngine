@@ -1,4 +1,5 @@
 import sympy as sp
+import symengine as se
 from einsteinengine.symbolic.metric import MetricTensor
 from einsteinengine.symbolic.christoffel import ChristoffelSymbols
 from einsteinengine.symbolic.riemann import RiemannCurvatureTensor
@@ -54,3 +55,38 @@ def test_riemann_curvature_component():
     expected = sp.sympify("2*M*(2*M - r)/r**4")
     
     assert sp.simplify(r_r_trt - expected) == 0
+
+
+def test_tensor_string_rendering_modes():
+    """Objects should support both rich LaTeX-style output and a plain-text fallback."""
+    metric, _, _, _ = get_schwarzschild_setup()
+
+    latex_output = metric.to_string(format="latex")
+    plain_output = metric.to_string(format="plain")
+
+    assert latex_output != plain_output
+    assert "\\begin" in latex_output or "\\left" in latex_output
+    assert isinstance(plain_output, str)
+    assert len(plain_output) > 0
+
+
+def test_component_access_fast_path_returns_raw_value():
+    """The no-simplification path should preserve the raw underlying expression."""
+    metric, _, _, _ = get_schwarzschild_setup()
+
+    component = metric.get_component(0, 0, simplify=False)
+
+    assert component == metric.get_raw_data()[0][0]
+
+
+def test_configurable_simplification_modes():
+    """Objects should support lightweight and full simplification strategies."""
+    metric, _, _, _ = get_schwarzschild_setup()
+
+    light_copy = metric.simplify(in_place=False, mode="light")
+    full_copy = metric.simplify(in_place=False, mode="full")
+
+    assert light_copy.dims == metric.dims
+    assert full_copy.dims == metric.dims
+    assert light_copy.name == metric.name
+    assert full_copy.name == metric.name
